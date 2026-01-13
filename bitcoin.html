@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Chart Only</title>
+  <style>
+    html, body { height: 100%; margin: 0; background: #000; }
+    .wrap { height: 100%; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="tradingview-widget-container" style="height:100%;width:100%">
+      <div class="tradingview-widget-container__widget" style="height:100%;width:100%"></div>
+      <script type="text/javascript"
+        src="https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js" async>
+      {
+        "autosize": true,
+        "symbol": "BINANCE:BTCUSDT",
+        "interval": "15",
+        "timezone": "Asia/Tokyo",
+        "theme": "dark",
+        "style": "1",
+        "hide_top_toolbar": true,
+        "hide_side_toolbar": true,
+        "withdateranges": false,
+        "save_image": false,
+        "calendar": false,
+        "support_host": "https://www.tradingview.com"
+      }
+      </script>
+    </div>
+  </div>
+</body>
+</html>
