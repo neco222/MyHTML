@@ -6,14 +6,11 @@
   <title>Crypto Charts (JPY)</title>
   <style>
     :root{
-      --stage-max-w: 1024px;   /* 添付画像に合わせる */
-      --stage-max-h: 576px;    /* 16:9 */
-      --stage-vw: 92vw;        /* フル画面より少し小さく */
-      --stage-vh: 92vh;
-
+      --margin: 18px;          /* フル画面より少し小さくする余白 */
       --gap: 10px;
       --radius: 14px;
-      --glass: rgba(20,20,20,.45);
+
+      --glass: rgba(20,20,20,.55);
       --glass-border: rgba(255,255,255,.12);
       --text: rgba(255,255,255,.92);
     }
@@ -22,33 +19,36 @@
       height: 100%;
       margin: 0;
       background: #0b0b0d;
-      color: var(--text);
+      overflow: hidden;
       font-family: system-ui, -apple-system, Segoe UI, Roboto, "Noto Sans JP", sans-serif;
+      color: var(--text);
     }
 
-    /* 画面中央に“少し小さめ”のステージを作る */
+    /* 画面に対して 16:9 の箱を「最大まで」広げる（でも余白は残す） */
     .stage-wrap{
-      min-height: 100%;
+      height: 100vh;
+      width: 100vw;
       display: grid;
       place-items: center;
-      padding: 18px;
+      padding: var(--margin);
       box-sizing: border-box;
     }
 
     .stage{
-      width: min(var(--stage-vw), var(--stage-max-w));
-      height: min(var(--stage-vh), var(--stage-max-h));
+      /* 16:9 を維持しつつ、画面内に収まる最大サイズ */
+      width: min(calc(100vw - (var(--margin) * 2)), calc((100vh - (var(--margin) * 2)) * (16 / 9)));
+      height: min(calc(100vh - (var(--margin) * 2)), calc((100vw - (var(--margin) * 2)) * (9 / 16)));
       aspect-ratio: 16 / 9;
-      box-sizing: border-box;
     }
 
-    /* 一括表示グリッド（画面幅で自動調整） */
+    /* 一括表示グリッド */
     .grid{
       width: 100%;
       height: 100%;
       display: grid;
       gap: var(--gap);
-      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      /* 1024幅だと 4列になるように。狭い画面では自動で減る */
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
       grid-auto-rows: 1fr;
     }
 
@@ -61,7 +61,7 @@
       border: 1px solid rgba(255,255,255,.08);
     }
 
-    /* 常時表示ラベル（ホバー不要） */
+    /* 常時ラベル表示（ホバー不要） */
     .label{
       position: absolute;
       top: 10px;
@@ -77,7 +77,7 @@
       letter-spacing: .2px;
       user-select: none;
       pointer-events: none; /* チャート操作を邪魔しない */
-      display: flex;
+      display: inline-flex;
       gap: 8px;
       align-items: center;
       white-space: nowrap;
@@ -91,21 +91,14 @@
       background: rgba(255,255,255,.06);
     }
 
-    /* TradingViewコンテナ */
     .tvbox{
       position: absolute;
       inset: 0;
     }
 
-    /* 小さい画面で見やすくする */
-    @media (max-width: 560px){
-      :root{
-        --stage-vw: 96vw;
-        --stage-vh: 94vh;
-      }
-      .label{ font-size: 12px; }
-      .grid{ grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
-    }
+    /* 114514を“中央1枚”にしたいならここを有効化
+       ただしあなたのスクショは「上段4枚＋下段3枚」なので今回は通常配置のまま */
+    /* .center1 { grid-column: 2 / span 1; } */
   </style>
 </head>
 
@@ -117,20 +110,18 @@
   </div>
 
   <script>
-    // 一括表示するコイン一覧（基本はJPY）
-    // 114514はJPYが一般的でないためUSDTにしています。
+    // 基本JPY（MASK/114514はJPYが無い可能性が高いのでUSDT）
     const COINS = [
-      { name: "BTC",     symbol: "BTCJPY",           note: "JPY" },
-      { name: "ETH",     symbol: "ETHJPY",           note: "JPY" },
-      { name: "SOL",     symbol: "SOLJPY",           note: "JPY" },
-      { name: "PEPE",    symbol: "PEPEJPY",          note: "JPY (meme)" },
-      { name: "MASK",    symbol: "MASKUSDT",         note: "USDT (utility)" }, // ←JPYが必要なら後で差し替え
-      { name: "SHIBA",   symbol: "SHIBJPY",          note: "JPY (meme)" },
-      { name: "114514",  symbol: "MEXC:114514USDT",  note: "USDT (meme)" }
+      { name: "BTC",    symbol: "BTCJPY",          note: "JPY" },
+      { name: "ETH",    symbol: "ETHJPY",          note: "JPY" },
+      { name: "SOL",    symbol: "SOLJPY",          note: "JPY" },
+      { name: "PEPE",   symbol: "PEPEJPY",         note: "JPY (meme)" },
+      { name: "MASK",   symbol: "MASKUSDT",        note: "USDT (utility)" },
+      { name: "SHIBA",  symbol: "SHIBJPY",         note: "JPY (meme)" },
+      { name: "114514", symbol: "MEXC:114514USDT", note: "USDT (meme)" }
     ];
 
-    // TradingView埋め込み（UIを極力消して“チャートだけ”に寄せる）
-    // hide_* 系は埋め込み例で広く使われています。
+    // TradingView埋め込み：邪魔なUIを減らす
     const TV_BASE = {
       interval: "15",
       timezone: "Asia/Tokyo",
@@ -143,13 +134,13 @@
       hotlist: false,
       calendar: false,
       studies: [],
-      // UI抑制（邪魔なものを減らす）
+      save_image: false,
+      autosize: true,
+
       hide_top_toolbar: true,
       hide_side_toolbar: true,
       hide_legend: true,
-      hide_volume: true,
-      save_image: false,
-      autosize: true
+      hide_volume: true
     };
 
     const grid = document.getElementById("grid");
@@ -160,23 +151,21 @@
 
       const label = document.createElement("div");
       label.className = "label";
-      label.innerHTML = `<strong>${name}</strong> <span class="pill">${note}</span>`;
+      label.innerHTML = `<strong>${name}</strong><span class="pill">${note}</span>`;
       panel.appendChild(label);
 
       const tv = document.createElement("div");
       tv.className = "tvbox";
       panel.appendChild(tv);
 
-      // Widget script
       const script = document.createElement("script");
       script.type = "text/javascript";
       script.src = "https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js";
       script.async = true;
 
-      const cfg = { ...TV_BASE, symbol };
-      script.innerHTML = JSON.stringify(cfg);
-
+      script.innerHTML = JSON.stringify({ ...TV_BASE, symbol });
       tv.appendChild(script);
+
       grid.appendChild(panel);
     }
 
