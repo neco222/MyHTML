@@ -4,9 +4,10 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Crypto Charts (JPY)</title>
+
   <style>
     :root{
-      --margin: 18px;          /* フル画面より少し小さくする余白 */
+      --margin: 16px;          /* フル画面より少し小さくする余白 */
       --gap: 10px;
       --radius: 14px;
 
@@ -15,53 +16,60 @@
       --text: rgba(255,255,255,.92);
     }
 
-    html, body {
+    html, body{
       height: 100%;
       margin: 0;
       background: #0b0b0d;
-      overflow: hidden;
-      font-family: system-ui, -apple-system, Segoe UI, Roboto, "Noto Sans JP", sans-serif;
+      overflow: hidden; /* スクロールで“上が空く”のを防ぐ */
       color: var(--text);
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, "Noto Sans JP", sans-serif;
     }
 
-    /* 画面に対して 16:9 の箱を「最大まで」広げる（でも余白は残す） */
+    /* 先頭固定（スクショはページ先頭から撮るので、上寄せが正解） */
     .stage-wrap{
-      height: 100vh;
       width: 100vw;
-      display: grid;
-      place-items: center;
+      height: 100vh;
       padding: var(--margin);
       box-sizing: border-box;
+
+      display: flex;
+      justify-content: center; /* 横だけ中央 */
+      align-items: flex-start; /* 縦は上寄せ */
     }
 
+    /* JSで “画面内に収まる最大の16:9” を width/height で直接セットする */
     .stage{
-      /* 16:9 を維持しつつ、画面内に収まる最大サイズ */
-      width: min(calc(100vw - (var(--margin) * 2)), calc((100vh - (var(--margin) * 2)) * (16 / 9)));
-      height: min(calc(100vh - (var(--margin) * 2)), calc((100vw - (var(--margin) * 2)) * (9 / 16)));
-      aspect-ratio: 16 / 9;
+      position: relative;
+      border-radius: 18px;
+      overflow: hidden;
     }
 
-    /* 一括表示グリッド */
     .grid{
       width: 100%;
       height: 100%;
       display: grid;
       gap: var(--gap);
-      /* 1024幅だと 4列になるように。狭い画面では自動で減る */
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      grid-auto-rows: 1fr;
+
+      /* 1024幅のスクショでも「上段4枚＋下段3枚」になりやすい設定 */
+      grid-template-columns: repeat(4, 1fr);
+      grid-template-rows: repeat(2, 1fr);
     }
+
+    /* 7枚目を下段の左3つにして、最後は空ける（見た目が安定する） */
+    .grid > .panel:nth-child(5){ grid-column: 1; grid-row: 2; }
+    .grid > .panel:nth-child(6){ grid-column: 2; grid-row: 2; }
+    .grid > .panel:nth-child(7){ grid-column: 3; grid-row: 2; }
 
     .panel{
       position: relative;
       border-radius: var(--radius);
       overflow: hidden;
       background: #0f1013;
-      box-shadow: 0 10px 30px rgba(0,0,0,.35);
       border: 1px solid rgba(255,255,255,.08);
+      box-shadow: 0 10px 30px rgba(0,0,0,.35);
     }
 
-    /* 常時ラベル表示（ホバー不要） */
+    /* ラベル常時表示（ホバー不要） */
     .label{
       position: absolute;
       top: 10px;
@@ -82,6 +90,7 @@
       align-items: center;
       white-space: nowrap;
     }
+
     .pill{
       font-size: 11px;
       opacity: .9;
@@ -96,46 +105,78 @@
       inset: 0;
     }
 
-    /* 114514を“中央1枚”にしたいならここを有効化
-       ただしあなたのスクショは「上段4枚＋下段3枚」なので今回は通常配置のまま */
-    /* .center1 { grid-column: 2 / span 1; } */
+    /* 小さい画面向け（列数を減らす） */
+    @media (max-width: 900px){
+      .grid{
+        grid-template-columns: repeat(3, 1fr);
+        grid-template-rows: repeat(3, 1fr);
+      }
+      .grid > .panel:nth-child(5){ grid-column:auto; grid-row:auto; }
+      .grid > .panel:nth-child(6){ grid-column:auto; grid-row:auto; }
+      .grid > .panel:nth-child(7){ grid-column:auto; grid-row:auto; }
+    }
   </style>
 </head>
 
 <body>
   <div class="stage-wrap">
-    <div class="stage">
+    <div class="stage" id="stage">
       <div class="grid" id="grid"></div>
     </div>
   </div>
 
   <script>
-    // 基本JPY（MASK/114514はJPYが無い可能性が高いのでUSDT）
+    // ===== 画面内に収まる最大の16:9（少し小さめ）を計算して stage に直指定 =====
+    function fitStage(){
+      const margin = parseInt(getComputedStyle(document.documentElement).getPropertyValue("--margin")) || 16;
+      const maxW = window.innerWidth  - margin * 2;
+      const maxH = window.innerHeight - margin * 2;
+
+      const aspectW = 16, aspectH = 9;
+      // width優先で仮置き
+      let w = maxW;
+      let h = Math.floor(w * 0.5625); // 9/16 = 0.5625
+
+      // 高さがはみ出すなら高さ優先
+      if (h > maxH){
+        h = maxH;
+        w = Math.floor(h * 1.7777778); // 16/9 ≈ 1.7777778
+      }
+
+      const stage = document.getElementById("stage");
+      stage.style.width  = w + "px";
+      stage.style.height = h + "px";
+    }
+
+    window.addEventListener("resize", fitStage);
+    fitStage();
+
+    // ===== コイン一覧（基本JPY、無い/怪しいものはUSDT）=====
     const COINS = [
-      { name: "BTC",    symbol: "BTCJPY",          note: "JPY" },
-      { name: "ETH",    symbol: "ETHJPY",          note: "JPY" },
-      { name: "SOL",    symbol: "SOLJPY",          note: "JPY" },
-      { name: "PEPE",   symbol: "PEPEJPY",         note: "JPY (meme)" },
-      { name: "MASK",   symbol: "MASKUSDT",        note: "USDT (utility)" },
-      { name: "SHIBA",  symbol: "SHIBJPY",         note: "JPY (meme)" },
-      { name: "114514", symbol: "MEXC:114514USDT", note: "USDT (meme)" }
+      { name:"BTC",    symbol:"BTCJPY",          note:"JPY" },
+      { name:"ETH",    symbol:"ETHJPY",          note:"JPY" },
+      { name:"SOL",    symbol:"SOLJPY",          note:"JPY" },
+      { name:"PEPE",   symbol:"PEPEJPY",         note:"JPY (meme)" },
+      { name:"MASK",   symbol:"MASKUSDT",        note:"USDT" },
+      { name:"SHIBA",  symbol:"SHIBJPY",         note:"JPY (meme)" },
+      { name:"114514", symbol:"MEXC:114514USDT", note:"USDT (meme)" }
     ];
 
-    // TradingView埋め込み：邪魔なUIを減らす
+    // ===== TradingView埋め込み：邪魔UI削減 =====
     const TV_BASE = {
+      autosize: true,
       interval: "15",
       timezone: "Asia/Tokyo",
       theme: "dark",
       style: "1",
       locale: "ja",
-      enable_publishing: false,
       allow_symbol_change: false,
+      enable_publishing: false,
       details: false,
       hotlist: false,
       calendar: false,
       studies: [],
       save_image: false,
-      autosize: true,
 
       hide_top_toolbar: true,
       hide_side_toolbar: true,
@@ -143,9 +184,25 @@
       hide_volume: true
     };
 
-    const grid = document.getElementById("grid");
+    function mountTV(targetEl, symbol){
+      // 公式と同じコンテナ構造に寄せる（安定）
+      targetEl.innerHTML = `
+        <div class="tradingview-widget-container" style="height:100%;width:100%">
+          <div class="tradingview-widget-container__widget" style="height:100%;width:100%"></div>
+        </div>
+      `;
+      const container = targetEl.querySelector(".tradingview-widget-container");
 
-    function addPanel({name, symbol, note}) {
+      const script = document.createElement("script");
+      script.src = "https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js";
+      script.async = true;
+      script.innerHTML = JSON.stringify({ ...TV_BASE, symbol });
+
+      container.appendChild(script);
+    }
+
+    const grid = document.getElementById("grid");
+    COINS.forEach(({name, symbol, note})=>{
       const panel = document.createElement("div");
       panel.className = "panel";
 
@@ -158,18 +215,9 @@
       tv.className = "tvbox";
       panel.appendChild(tv);
 
-      const script = document.createElement("script");
-      script.type = "text/javascript";
-      script.src = "https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js";
-      script.async = true;
-
-      script.innerHTML = JSON.stringify({ ...TV_BASE, symbol });
-      tv.appendChild(script);
-
       grid.appendChild(panel);
-    }
-
-    COINS.forEach(addPanel);
+      mountTV(tv, symbol);
+    });
   </script>
 </body>
 </html>
