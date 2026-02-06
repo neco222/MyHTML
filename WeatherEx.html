@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>配信用 天気予報</title>
+  <title>配信用 天気予報（フリップ演出）</title>
   <style>
     :root {
       --bg-color: #1a1a1a;
@@ -17,12 +17,12 @@
     }
     body {
       margin: 0;
-      background: #000; /* OBS等の背景透過用に黒、あるいはクロマキー色にしてもOK */
+      background: #000;
       color: var(--text-main);
       font-family: "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif;
     }
 
-    /* --- オペレーター用コントロール（配信画面ではトリミング対象） --- */
+    /* --- オペレーター用コントロール --- */
     .control-panel {
       background: #333;
       padding: 10px 20px;
@@ -43,23 +43,49 @@
 
     /* --- 配信表示エリア --- */
     .broadcast-view {
-      padding: 40px; /* 余白 */
+      padding: 40px;
       max-width: 1200px;
       margin: 0 auto;
+      /* 3D効果のために視点を設定 */
+      perspective: 2000px;
     }
 
-    /* メインカード */
+    /* メインカード（パラパラ時計風アニメーション） */
     .weather-card {
       background: var(--bg-color);
+      /* 僅かにグラデーションを入れて立体感を出す */
+      background: linear-gradient(to bottom, #2a2a2a 0%, #1a1a1a 100%);
       border: 1px solid var(--border-color);
+      /* 上部にハイライト線を入れて厚みを表現 */
+      border-top: 1px solid #555;
+      
       border-radius: 24px;
       padding: 30px;
-      box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+      box-shadow: 0 20px 50px rgba(0,0,0,0.8);
+
+      /* --- アニメーションの肝 --- */
+      /* 回転の軸を「上辺」に設定 */
+      transform-origin: center top;
+      /* 初期状態：奥に90度倒れている（見えない） */
+      transform: rotateX(-90deg);
       opacity: 0;
-      transform: translateY(10px);
-      transition: opacity 0.4s ease, transform 0.4s ease;
+      
+      /* 動きの設定：消えるときは素早く */
+      transition: transform 0.4s ease-in, opacity 0.3s ease-in;
+      
+      /* 背面が見えないようにする */
+      backface-visibility: hidden;
     }
-    .weather-card.show { opacity: 1; transform: translateY(0); }
+
+    /* 表示状態クラス */
+    .weather-card.show {
+      opacity: 1;
+      transform: rotateX(0deg); /* 定位置に戻る */
+      
+      /* 出現時はバネのように少し行き過ぎて戻る（バウンス） */
+      /* cubic-bezier(x1, y1, x2, y2) で物理的な揺れを表現 */
+      transition: transform 0.8s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.4s ease-out;
+    }
 
     /* 地域・ヘッダー */
     .header-info {
@@ -71,10 +97,11 @@
       padding-bottom: 15px;
     }
     .location-name {
-      font-size: 48px; /* かなり大きく */
+      font-size: 48px;
       font-weight: 900;
       line-height: 1.1;
       letter-spacing: 0.05em;
+      text-shadow: 0 2px 4px rgba(0,0,0,0.5);
     }
     .location-sub {
       font-size: 24px;
@@ -102,6 +129,8 @@
       padding: 20px;
       text-align: center;
       border: 1px solid var(--border-color);
+      /* パネル自体にも僅かな立体感 */
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
     }
 
     .date-label {
@@ -113,7 +142,7 @@
     }
     
     .weather-icon {
-      width: 100px; /* アイコン巨大化 */
+      width: 100px;
       height: auto;
       filter: drop-shadow(0 4px 6px rgba(0,0,0,0.3));
       margin-bottom: 10px;
@@ -133,7 +162,7 @@
       display: flex;
       justify-content: center;
       gap: 20px;
-      font-size: 28px; /* 温度大きく */
+      font-size: 28px;
       font-weight: 800;
       margin-bottom: 20px;
       background: rgba(0,0,0,0.2);
@@ -192,7 +221,7 @@
 
   <script>
     // 設定：切り替え時間（ミリ秒）
-    const ROTATE_MS = 10000; // 10秒に延長（読む時間を確保）
+    const ROTATE_MS = 10000;
     
     const AREAS = [
       { area:"北海道", city:"札幌", id:"016010" },
@@ -209,7 +238,7 @@
     ];
 
     const API_BASE = "https://weather.tsukumijima.net/api/forecast/city/";
-    const CACHE_TTL_MS = 30 * 60 * 1000; // 30分キャッシュ
+    const CACHE_TTL_MS = 30 * 60 * 1000;
 
     let idx = 0;
     let timer = null;
@@ -258,7 +287,7 @@
       if(cached) return {data: cached, fromCache: true};
 
       const ctrl = new AbortController();
-      const to = setTimeout(() => ctrl.abort(), 8000); // 8秒タイムアウト
+      const to = setTimeout(() => ctrl.abort(), 8000);
 
       const res = await fetch(API_BASE + encodeURIComponent(id), {signal: ctrl.signal});
       clearTimeout(to);
@@ -268,37 +297,26 @@
       return {data, fromCache: false};
     }
 
-    // Helper: Temp Formatting
+    // Helpers
     function fmtTemp(v){
       if(v === null || v === undefined) return "--";
       return String(v);
     }
-
-    // Helper: Rain Table Generator
     function makeRainTable(rain){
       if(!rain) return "";
-      // 時間枠
       const t00 = rain.T00_06 ?? "-";
       const t06 = rain.T06_12 ?? "-";
       const t12 = rain.T12_18 ?? "-";
       const t18 = rain.T18_24 ?? "-";
-      
       return `
         <table class="rain-table">
-          <tr>
-            <th>00-06</th><th>06-12</th><th>12-18</th><th>18-24</th>
-          </tr>
-          <tr>
-            <td>${t00}</td><td>${t06}</td><td>${t12}</td><td>${t18}</td>
-          </tr>
-        </table>
-      `;
+          <tr><th>00-06</th><th>06-12</th><th>12-18</th><th>18-24</th></tr>
+          <tr><td>${t00}</td><td>${t06}</td><td>${t12}</td><td>${t18}</td></tr>
+        </table>`;
     }
 
-    // Rendering
     function renderDays(forecasts){
       elDays.innerHTML = "";
-      // 最大3日分表示
       const list = (forecasts || []).slice(0, 3);
 
       list.forEach(f => {
@@ -314,60 +332,69 @@
           <span class="date-label">${dateLabel}</span>
           <img class="weather-icon" src="${iconUrl}" alt="天気アイコン" />
           <div class="telop">${telop}</div>
-          
           <div class="temps">
-            <div>
-              <span class="temp-label">最高</span>
-              <span class="temp-max">${max}</span><span style="font-size:0.6em">°</span>
-            </div>
+            <div><span class="temp-label">最高</span><span class="temp-max">${max}</span><span style="font-size:0.6em">°</span></div>
             <div style="border-left:1px solid #444; width:1px; margin:0 5px;"></div>
-            <div>
-              <span class="temp-label">最低</span>
-              <span class="temp-min">${min}</span><span style="font-size:0.6em">°</span>
-            </div>
+            <div><span class="temp-label">最低</span><span class="temp-min">${min}</span><span style="font-size:0.6em">°</span></div>
           </div>
-
           ${makeRainTable(f?.chanceOfRain)}
         `;
         elDays.appendChild(div);
       });
     }
 
+    // Main Display Function
     async function show(i){
       idx = (i + AREAS.length) % AREAS.length;
       const a = AREAS[idx];
 
-      // UI Updates
+      // 1. まず現在のカードを「跳ね上げて」隠す（Exit Animation）
+      elCard.classList.remove("show");
+
+      // UI Updates (コントローラー側は即時反映)
       elCounter.textContent = `${idx+1} / ${AREAS.length}`;
       selJump.value = String(idx);
-      
-      // テキストセット（cityIDは表示しない）
-      elArea.textContent = a.area;
-      elCity.textContent = a.city; 
-      
-      elMeta.textContent = "更新中...";
-      elErr.style.display = "none";
 
-      // アニメーションリセット
-      elCard.classList.remove("show");
+      // 2. アニメーションでカードが消えるのを待つ + データを取得する
+      // （約500ms待つことで、完全にカードが上に回転しきってから書き換える）
+      const waitAnim = new Promise(r => setTimeout(r, 500)); 
       
-      try{
-        // 少し遅延させてフェードイン感を出す
-        setTimeout(() => elCard.classList.add("show"), 50);
+      let forecastData = null;
+      let isError = false;
+      let errorMsg = "";
 
+      try {
         const {data, fromCache} = await fetchForecast(a.id);
-        const pubTime = data?.publicTimeFormatted || data?.publicTime || "";
-        
-        elMeta.textContent = `発表: ${pubTime} ${fromCache ? "(Cache)" : ""}`;
-        renderDays(data?.forecasts);
+        forecastData = data;
+      } catch(e) {
+        isError = true;
+        errorMsg = e.message;
+      }
 
-      }catch(e){
+      // アニメーション待ち時間が終わるまで待機
+      await waitAnim;
+
+      // 3. 隠れた状態で中身を書き換える
+      elArea.textContent = a.area;
+      elCity.textContent = a.city;
+      
+      if(!isError && forecastData){
+        const pubTime = forecastData?.publicTimeFormatted || forecastData?.publicTime || "";
+        elMeta.textContent = `発表: ${pubTime}`;
+        renderDays(forecastData?.forecasts);
+        elErr.style.display = "none";
+      } else {
         elMeta.textContent = "Error";
         elDays.innerHTML = "";
-        elErr.textContent = `データ取得エラー: ${e.message}`;
+        elErr.textContent = `取得エラー: ${errorMsg}`;
         elErr.style.display = "block";
-        elCard.classList.add("show"); // エラーでもカードは表示
       }
+
+      // 4. 新しいカードとして「上から落とす」（Enter Animation）
+      // DOM更新後にレイアウト計算を確定させるために少しだけディレイを入れる
+      requestAnimationFrame(() => {
+        elCard.classList.add("show");
+      });
     }
 
     // Control Logic
@@ -386,7 +413,7 @@
       timer = null;
       playing = false;
       btnToggle.textContent = "▶ 再開";
-      btnToggle.style.background = "#a33"; // 停止中は赤っぽく
+      btnToggle.style.background = "#a33";
     }
 
     // Event Listeners
@@ -399,7 +426,13 @@
     });
 
     // Initial Load
-    show(0);
+    // 最初はじわっと出すため、初期ロード時は少し特殊な呼び出し
+    (async () => {
+       // 初期状態はLoading...
+       elCard.classList.remove("show"); 
+       await show(0);
+    })();
+    
     start();
   </script>
 </body>
